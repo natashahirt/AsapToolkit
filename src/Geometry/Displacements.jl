@@ -125,9 +125,9 @@ function ulocal(element::Element, model::Model; resolution = 20)
 
     D = unodal(element; n = resolution)
 
-    loadids = get_elemental_loads(model)
+    element_loads = get_elemental_loads(model)
 
-    for load in model.loads[loadids[element.elementID]]
+    for load in element_loads[element.elementID]
         accumulatedisp!(load, xinc, D[2,:], D[3,:])
     end
 
@@ -147,9 +147,9 @@ function uglobal(element::Element, model::Model; resolution = 20)
 
     D = unodal(element; n = resolution)
 
-    loadids = get_elemental_loads(model)
+    element_loads = get_elemental_loads(model)
 
-    for load in model.loads[loadids[element.elementID]]
+    for load in element_loads[element.elementID]
         accumulatedisp!(load, xinc, D[2,:], D[3,:])
     end
 
@@ -177,9 +177,9 @@ function ElementDisplacements(element::Asap.AbstractElement, model::Asap.Model; 
 
     Dx, Dy, Dz = unodal(element; n = resolution)
 
-    loadids = get_elemental_loads(model)
+    element_loads = get_elemental_loads(model)
 
-    for load in model.loads[loadids[element.elementID]]
+    for load in element_loads[element.elementID]
         accumulatedisp!(load, xinc, Dy, Dz)
     end
 
@@ -201,7 +201,7 @@ function ElementDisplacements(elements::AbstractVector{<:Asap.AbstractElement}, 
 
     resolution = Int(round(resolution / length(elements)))
 
-    loadids = get_elemental_loads(model)
+    element_loads = get_elemental_loads(model)
 
     for element in elements
         L = element.length
@@ -210,7 +210,7 @@ function ElementDisplacements(elements::AbstractVector{<:Asap.AbstractElement}, 
 
         Dx, Dy, Dz = unodal(element; n = resolution)
 
-        for load in model.loads[loadids[element.elementID]]
+        for load in element_loads[element.elementID]
             accumulatedisp!(load, xinc, Dy, Dz)
         end
 

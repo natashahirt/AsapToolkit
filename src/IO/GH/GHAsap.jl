@@ -57,14 +57,6 @@ struct GHsection
 end
 
 const release2bool = Dict(
-    :fixedfixed => [false, false, false, false, false, false],
-    :freefixed => [true, true, true, false, false, false],
-    :fixedfree => [false, false, false, true, true, true],
-    :freefree => [true, true, true, true, true, true],
-    :joist => [false, true, true, false, true, true]
-)
-
-const release2bool2 = Dict(
     Asap.FixedFixed => [false, false, false, false, false, false],
     Asap.FreeFixed => [true, true, true, false, false, false],
     Asap.FixedFree => [false, false, false, true, true, true],
@@ -74,7 +66,7 @@ const release2bool2 = Dict(
 
 function convert_release_to_bool(element::Element{T}) where {T}
 
-    return release2bool2[T]
+    return release2bool[T]
 
 end
 

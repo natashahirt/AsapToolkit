@@ -95,10 +95,10 @@ function InternalForces(element::Asap.AbstractElement, model::Asap.Model; resolu
     Mz = Vzstart .* xinc .- Mzstart
     Vz = zero(Mz) .+ Vzstart
 
-    loadids = get_elemental_loads(model)
+    element_loads = get_elemental_loads(model)
 
     # accumulate loads
-    for load in model.loads[loadids[element.elementID]]
+    for load in element_loads[element.elementID]
         accumulate_force!(load,
             xinc,
             P,
@@ -158,13 +158,13 @@ end
 
 function get_elemental_loads(model::Model)
 
-    element_to_loadids = [Int64[] for _ in 1:model.nElements]
+    element_to_loads = [AbstractLoad[] for _ in 1:model.nElements]
     for load in model.loads
         hasproperty(load, :element) || continue
-        push!(element_to_loadids[load.element.elementID], load.loadID)
+        push!(element_to_loads[load.element.elementID], load)
     end
 
-    return element_to_loadids
+    return element_to_loads
 
 end
 
@@ -184,10 +184,11 @@ function InternalForces(elements::AbstractVector{<:Asap.AbstractElement}, model:
 
     resolution = Int(round(resolution / length(elements)))
 
-    element_load_ids = get_elemental_loads(model)
+    element_loads_map = get_elemental_loads(model)
 
     #beam information
-    for (element, loadids) in zip(elements, element_load_ids)
+    for element in elements
+        loadids = element_loads_map[element.elementID]
 
         dofs = etype2DOF[typeof(element)]
         L = element.length
@@ -212,7 +213,7 @@ function InternalForces(elements::AbstractVector{<:Asap.AbstractElement}, model:
         Vz = zero(Mz) .+ Vzstart
 
         # accumulate loads
-        for load in model.loads[loadids]
+        for load in loadids
             accumulate_force!(load,
                 xinc,
                 P,
@@ -253,13 +254,13 @@ function InternalForces(model::Asap.Model, increment::Real)
 
     results = Vector{InternalForces}()
 
-    loadids = get_elemental_loads(model)
+    element_loads_map = get_elemental_loads(model)
 
-    for (element, loadset) in zip(model.elements, loadids)
+    for element in model.elements
     
         n = max(Int(round(element.length / increment)), 2)
 
-        push!(results, InternalForces(element, model.loads[loadset]; resolution = n))
+        push!(results, InternalForces(element, element_loads_map[element.elementID]; resolution = n))
     end
 
     return results

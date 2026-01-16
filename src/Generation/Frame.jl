@@ -135,10 +135,9 @@ function Frame(nx::Integer,
     for i in 1:nx+1
         for j in 1:ny+1
             for k in 1:nz
-                el = Element(nodes[i,j,k], nodes[i,j,k+1], columnSection, columnRelease)
+                el = Element(nodes[i,j,k], nodes[i,j,k+1], columnSection, :column; release = columnRelease)
                 # el.Ψ = 0
                 el.Ψ = columnPsi
-                el.id = :column
                 push!(columns, el)
             end
         end
@@ -153,8 +152,7 @@ function Frame(nx::Integer,
     for k in 2:nz+1
         for i in 1:nx
             for j in 1:ny+1
-                el = Element(nodes[i,j,k], nodes[i+1,j,k], primarySection, primaryRelease)
-                el.id = :primary
+                el = Element(nodes[i,j,k], nodes[i+1,j,k], primarySection, :primary; release = primaryRelease)
                 el.Ψ = primaryPsi
                 push!(primaries, el)
             end
@@ -174,10 +172,9 @@ function Frame(nx::Integer,
     for k in 1:nz
         for j = 1:nx
             for i = 1:ny
-                bridges = [BridgeElement(primreshaped[i,j,k], x, primreshaped[i+1,j,k], x, joistSection, joistRelease) for x in range(0,1,njoists)[2:end-1]]
+                bridges = [BridgeElement(primreshaped[i,j,k], x, primreshaped[i+1,j,k], x, joistSection, :joist; release = joistRelease) for x in range(0,1,njoists)[2:end-1]]
 
                 for bridge in bridges
-                    bridge.id = :joist
                     bridge.Ψ = joistPsi
                 end
 
@@ -191,9 +188,8 @@ function Frame(nx::Integer,
     for i in 1:nx+1
         for j in 1:ny
             for k in 2:nz+1
-                bridge = Element(nodes[i,j,k], nodes[i,j+1,k], joistSection, joistRelease)
+                bridge = Element(nodes[i,j,k], nodes[i,j+1,k], joistSection, :joist; release = joistRelease)
                 # bridge.Ψ = 0.
-                bridge.id = :joist
                 bridge.Ψ = joistPsi
                 push!(secondaries, bridge)
             end
@@ -208,10 +204,9 @@ function Frame(nx::Integer,
     i = 1
     for j = [1, ny+1]
         for k = 1:nz
-            brace1 = Element(nodes[i,j,k], nodes[i+1,j,k+1], braceSection, braceRelease)
-            brace2 = Element(nodes[i+1,j,k], nodes[i,j,k+1], braceSection, braceRelease)
+            brace1 = Element(nodes[i,j,k], nodes[i+1,j,k+1], braceSection, :brace; release = braceRelease)
+            brace2 = Element(nodes[i+1,j,k], nodes[i,j,k+1], braceSection, :brace; release = braceRelease)
 
-            brace1.id = brace2.id = :brace
             push!(braces, brace1, brace2)
         end
     end
@@ -219,10 +214,9 @@ function Frame(nx::Integer,
     j = 1
     for i = [1, nx+1]
         for k = 1:nz
-            brace1 = Element(nodes[i,j,k], nodes[i, j+1, k+1], braceSection, braceRelease)
-            brace2 = Element(nodes[i,j+1,k], nodes[i,j,k+1], braceSection, braceRelease)
+            brace1 = Element(nodes[i,j,k], nodes[i, j+1, k+1], braceSection, :brace; release = braceRelease)
+            brace2 = Element(nodes[i,j+1,k], nodes[i,j,k+1], braceSection, :brace; release = braceRelease)
 
-            brace1.id = brace2.id = :brace
             push!(braces, brace1, brace2)
         end
     end
@@ -236,10 +230,9 @@ function Frame(nx::Integer,
         for k = 2:nz+1
             for i = 1:nx
                 for j = 1:ny
-                    diaph1 = Element(nodes[i, j, k], nodes[i+1, j+1, k], dsection, :freefree)
-                    diaph2 = Element(nodes[i+1, j, k], nodes[i, j+1, k], dsection, :freefree)
+                    diaph1 = Element(nodes[i, j, k], nodes[i+1, j+1, k], dsection, :diaphragm; release = :freefree)
+                    diaph2 = Element(nodes[i+1, j, k], nodes[i, j+1, k], dsection, :diaphragm; release = :freefree)
 
-                    diaph1.id = diaph2.id = :diaphragm
                     push!(braces, diaph1, diaph2)
                 end
             end

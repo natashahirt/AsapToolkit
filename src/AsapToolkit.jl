@@ -2,6 +2,8 @@ module AsapToolkit
 using Reexport
 using Asap, LinearAlgebra, Statistics, Interpolations, SparseArrays
 using JSON
+using XLSX
+using Unitful
 
 include("Generation/Generators.jl")
 export Frame

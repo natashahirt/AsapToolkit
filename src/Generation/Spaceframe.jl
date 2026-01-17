@@ -20,21 +20,18 @@ struct SpaceFrame <: AbstractGenerator
 end
 
 """
-    SpaceFrame(nx::Integer,
-    dx::Real,
-    ny::Integer,
-    dy::Real,
-    dz::Real,
-    section::Asap.AbstractSection;
-    support = :corner,
-    load = [0., 0., -10.],
-    base = [0., 0., 0.])
+    SpaceFrame(nx, dx, ny, dy, dz, section; support=:corner, load=[0.0u"N", 0.0u"N", -10.0u"N"], base=[0., 0., 0.])
 
-Generate a spaceframe truss model of planar bay spacing dx, dy, with nx, ny nodes in each direction, with roof thickness dz. Options for support include:
-- `:corner` pinned supports at the 4 corner bays (total of 16 pinned supports)
-- `:x` pinned supports along exterior nodes parallel to the global X direction
-- `:y` pinned supports along exterior nodes parallel to the global Y direction
-- `:xy` pinned supports along all exterior nodes
+Generate a spaceframe truss model.
+
+# Arguments
+- `nx, ny::Integer` number of bays in x/y directions
+- `dx, dy::Real` bay spacing in x/y directions (meters)
+- `dz::Real` roof thickness (meters)
+- `section::Asap.AbstractSection` cross section of bars
+- `support = :corner` support condition (:corner, :x, :y, :xy)
+- `load::Vector{QuantityForce}` force applied to free nodes
+- `base::Vector{Real}` base point coordinates (meters, converted internally)
 """
 function SpaceFrame(nx::Integer,
         dx::Real,
@@ -43,11 +40,12 @@ function SpaceFrame(nx::Integer,
         dz::Real,
         section::Asap.AbstractSection;
         support = :corner,
-        load = [0., 0., -10.],
+        load = [0.0u"N", 0.0u"N", -10.0u"N"],
         base = [0., 0., 0.])
 
-    #generate nodes for bottom plane
-    bottomnodes = [TrussNode([dx * (i-1), dy * (j-1), 0.] .+ base, :free) for i in 1:nx+1, j in 1:ny+1]
+    #generate nodes for bottom plane - promote to Unitful
+    base_unitful = [b * u"m" for b in base]
+    bottomnodes = [TrussNode([dx * (i-1) * u"m", dy * (j-1) * u"m", 0.0u"m"] .+ base_unitful, :free) for i in 1:nx+1, j in 1:ny+1]
     for node in bottomnodes
         node.id = :bottom
     end
@@ -56,7 +54,7 @@ function SpaceFrame(nx::Integer,
     xinit = dx / 2
     yinit = dy / 2
 
-    topnodes = [TrussNode([dx * (i-1) + xinit, dy * (j-1) + yinit, dz], :free) for i in 1:nx, j in 1:ny]
+    topnodes = [TrussNode([(dx * (i-1) + xinit) * u"m", (dy * (j-1) + yinit) * u"m", dz * u"m"], :free) for i in 1:nx, j in 1:ny]
     for node in topnodes
         node.id = :top
     end
@@ -238,7 +236,7 @@ function SpaceFrame(nx::Integer,
     section::Asap.AbstractSection,
     offset = false;
     support = :corner,
-    load = [0., 0., -10.],
+    load = [0.0u"N", 0.0u"N", -10.0u"N"],
     base = [0., 0., 0.])
 
     @assert bounds(interpolator.itp) == ((0.0, 1.0), (0.0, 1.0)) "Interpolator must be parameterized from 0 → 1 for both x,y coordinates"
@@ -248,9 +246,11 @@ function SpaceFrame(nx::Integer,
 
     if offset
         #generate nodes for bottom plane
-        bottomnodes = [TrussNode([dx * (i-1), 
-            dy * (j-1), 
-            interpolator(dx * (i-1) / xmax, dy * (j-1) /ymax)] .+ base, :free) for i in 1:nx+1, j in 1:ny+1]
+        # Promote base and positions to Unitful
+        base_unitful = [b * u"m" for b in base]
+        bottomnodes = [TrussNode([dx * (i-1) * u"m", 
+            dy * (j-1) * u"m", 
+            interpolator(dx * (i-1) / xmax, dy * (j-1) /ymax) * u"m"] .+ base_unitful, :free) for i in 1:nx+1, j in 1:ny+1]
         for node in bottomnodes
             node.id = :bottom
         end
@@ -259,9 +259,9 @@ function SpaceFrame(nx::Integer,
         xinit = dx / 2
         yinit = dy / 2
 
-        topnodes = [TrussNode([dx * (i-1) + xinit, 
-            dy * (j-1) + yinit, 
-            z0 + interpolator(dx * (i-1) / xmax, dy * (j-1) /ymax)], 
+        topnodes = [TrussNode([(dx * (i-1) + xinit) * u"m", 
+            (dy * (j-1) + yinit) * u"m", 
+            (z0 + interpolator(dx * (i-1) / xmax, dy * (j-1) /ymax)) * u"m"], 
             :free) for i in 1:nx, j in 1:ny]
 
         for node in topnodes
@@ -269,7 +269,9 @@ function SpaceFrame(nx::Integer,
         end
     else
         #generate nodes for bottom plane
-        bottomnodes = [TrussNode([dx * (i-1), dy * (j-1), 0.] .+ base, :free) for i in 1:nx+1, j in 1:ny+1]
+        # Promote base and positions to Unitful
+        base_unitful = [b * u"m" for b in base]
+        bottomnodes = [TrussNode([dx * (i-1) * u"m", dy * (j-1) * u"m", 0.0u"m"] .+ base_unitful, :free) for i in 1:nx+1, j in 1:ny+1]
         for node in bottomnodes
             node.id = :bottom
         end
@@ -278,9 +280,9 @@ function SpaceFrame(nx::Integer,
         xinit = dx / 2
         yinit = dy / 2
 
-        topnodes = [TrussNode([dx * (i-1) + xinit, 
-            dy * (j-1) + yinit, 
-            z0 + interpolator(dx * (i-1) / xmax, dy * (j-1) /ymax)], 
+        topnodes = [TrussNode([(dx * (i-1) + xinit) * u"m", 
+            (dy * (j-1) + yinit) * u"m", 
+            (z0 + interpolator(dx * (i-1) / xmax, dy * (j-1) /ymax)) * u"m"], 
             :free) for i in 1:nx, j in 1:ny]
 
         for node in topnodes

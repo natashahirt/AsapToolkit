@@ -45,17 +45,19 @@ Where `ulocal` and `uglobal` are $3 \times \text{resolution}$ matrices where eac
 
 ## Example:
 ```julia
+using Unitful
+
 section = toASAPframe(rand(allW()), Steel_Nmm.E, Steel_Nmm.G)
 
-n1 = Node([0., 0., 0.], :fixed)
-n2 = Node([6000., 0., 0.], :fixed)
+n1 = Node([0.0u"mm", 0.0u"mm", 0.0u"mm"], :fixed)
+n2 = Node([6000.0u"mm", 0.0u"mm", 0.0u"mm"], :fixed)
 nodes = [n1, n2]
 
 element = Element(n1, n2, section)
 elements = [element]
 
-load1 = LineLoad(element, [0., 0., -30])
-pointloads = [PointLoad(element, rand(), 25e3 .* [0., 0., -rand()]) for _ = 1:5]
+load1 = LineLoad(element, [0.0u"N/m", 0.0u"N/m", -30.0u"N/m"])
+pointloads = [PointLoad(element, rand(), [0.0u"N", 0.0u"N", -25e3*rand()*u"N"]) for _ = 1:5]
 loads = [load1; pointloads]
 
 model = Model(nodes, elements, loads)

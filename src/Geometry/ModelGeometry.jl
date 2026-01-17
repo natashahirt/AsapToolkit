@@ -30,11 +30,12 @@ struct ModelGeo <: AbstractGeo
     element_vectors_xy::Vector{Vector{Float64}}
 
     function ModelGeo(model::Model)
-
-        nodes = getproperty.(model.nodes, :position)
+        # Strip units from positions (convert Quantity → Float64)
+        nodes = [[ustrip(u"m", uconvert(u"m", p)) for p in node.position] for node in model.nodes]
         nodes_xy = [node[1:2] for node in nodes]
 
-        disp = [node.displacement[1:3] for node in model.nodes]
+        # Strip units from displacements: first 3 DOFs are translations (m)
+        disp = [Asap.to_displacement_vec(node.displacement)[1:3] for node in model.nodes]
         disp_xy = [d[1:2] for d in disp]
 
         indices = Asap.nodeids.(model.elements)
@@ -62,20 +63,24 @@ struct ModelGeo <: AbstractGeo
 
         sections = getproperty.(model.elements, :section)
 
-        areas = getproperty.(sections, :A)
+        # Strip units from section properties (convert Quantity → Float64)
+        areas = [ustrip(u"m^2", uconvert(u"m^2", s.A)) for s in sections]
         max_area = maximum(areas)
 
-        Ix = getproperty.(sections, :Ix)
+        Ix = [ustrip(u"m^4", uconvert(u"m^4", s.Ix)) for s in sections]
         max_Ix = maximum(Ix)
 
-        Iy = getproperty.(sections, :Iy)
+        Iy = [ustrip(u"m^4", uconvert(u"m^4", s.Iy)) for s in sections]
         max_Iy = maximum(Iy)
 
-        J = getproperty.(sections, :J)
+        J = [ustrip(u"m^4", uconvert(u"m^4", s.J)) for s in sections]
         max_J = maximum(J)
 
         element_vectors = Asap.local_x.(model.elements)
         element_vectors_xy = [evec[1:2] for evec in element_vectors]
+
+        # Strip units from lengths (convert Quantity → Float64)
+        lengths = [ustrip(u"m", uconvert(u"m", e.length)) for e in model.elements]
 
         return new(
             nodes,
@@ -104,7 +109,7 @@ struct ModelGeo <: AbstractGeo
             max_Iy,
             J,
             max_J,
-            getproperty.(model.elements, :length),
+            lengths,
             element_vectors,
             element_vectors_xy
         )

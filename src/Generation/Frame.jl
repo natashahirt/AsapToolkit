@@ -113,16 +113,20 @@ function Frame(nx::Integer,
     # nodes
     ########
 
-    xoffset = [dx, 0., 0.]
-    yoffset = [0., dy, 0.]
-    zoffset = [0., 0., dz]
+    # Convert base and offsets to Unitful (promote Float64 → Quantity)
+    base_unitful = [b * u"m" for b in base]
+    xoffset = [dx * u"m", 0.0u"m", 0.0u"m"]
+    yoffset = [0.0u"m", dy * u"m", 0.0u"m"]
+    zoffset = [0.0u"m", 0.0u"m", dz * u"m"]
 
     #generate
-    nodes = [Node(base + xoffset * i + yoffset * j + zoffset * k, :pinned) for i in 0:nx, j in 0:ny, k in 0:nz]
+    nodes = [Node(base_unitful + xoffset * i + yoffset * j + zoffset * k, :pinned) for i in 0:nx, j in 0:ny, k in 0:nz]
 
-    #release non-ground nodes
+    #release non-ground nodes (strip units for comparison)
+    base_z = base[3]  # Float64 base z coordinate
     for node in nodes
-        if last(node.position) > last(base)
+        node_z = ustrip(u"m", uconvert(u"m", last(node.position)))
+        if node_z > base_z
             fixnode!(node, :free)
         end
     end
@@ -244,7 +248,7 @@ function Frame(nx::Integer,
     # dummy load and assembly
     ######
 
-    loads = [LineLoad(j, [0., 0., -1.]) for j in secondaries]
+    loads = [LineLoad(j, [0.0u"N/m", 0.0u"N/m", -1.0u"N/m"]) for j in secondaries]
     flatnodes = vec(nodes)
     elements = [columns; primaries; secondaries; braces]
 
@@ -263,12 +267,14 @@ function Frame(nx::Integer,
     yExtrema = [base[2], base[2] + dy * ny]
     for (i,element) in enumerate(model.elements)
         if element.id == :joist
-            x = element.nodeStart.position[1]
+            # Strip units from position (convert Quantity → Float64)
+            x = ustrip(u"m", uconvert(u"m", element.nodeStart.position[1]))
             if minimum(abs.(xExtrema .- x)) <= model.tol
                 push!(iExteriorXjoists, i)
             end
         elseif element.id == :primary
-            y = element.nodeStart.position[2]
+            # Strip units from position (convert Quantity → Float64)
+            y = ustrip(u"m", uconvert(u"m", element.nodeStart.position[2]))
             if minimum(abs.(yExtrema .- y)) <= model.tol
                 push!(iExteriorYprimary, i)
             end

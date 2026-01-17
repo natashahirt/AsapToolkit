@@ -42,9 +42,14 @@ Get the [3 × n] matrix where each column represents the local [x,y,z] displacem
 """
 function unodal(element::Element; n::Integer = 20)
 
+    # Strip units from displacements for matrix multiplication (R and K are Float64)
+    # DOFs 1-3 are translations (m), DOFs 4-6 are rotations (rad)
+    ustart = Asap.to_displacement_vec(element.nodeStart.displacement)
+    uend = Asap.to_displacement_vec(element.nodeEnd.displacement)
+    
     # base properties
-    ulocal = element.R * [element.nodeStart.displacement; element.nodeEnd.displacement] .* etype2DOF[typeof(element)]
-    L = element.length
+    ulocal = element.R * [ustart; uend] .* etype2DOF[typeof(element)]
+    L = ustrip(u"m", element.length)
 
     # extracting relevant nodal DOFs
     uX = ulocal[[1, 7]]
@@ -75,13 +80,15 @@ function accumulatedisp!(
     Dz::Vector{Float64})
 
     R = load.element.R[1:3, 1:3]
-    L = load.element.length
-    E = load.element.section.E
-    Istrong = load.element.section.Ix
-    Iweak = load.element.section.Iy
+    # Strip units from length and section properties (convert Quantity → Float64)
+    L = ustrip(u"m", uconvert(u"m", load.element.length))
+    E = ustrip(u"Pa", uconvert(u"Pa", load.element.section.E))
+    Istrong = ustrip(u"m^4", uconvert(u"m^4", load.element.section.Ix))
+    Iweak = ustrip(u"m^4", uconvert(u"m^4", load.element.section.Iy))
 
-    # distributed load magnitudes in LCS
-    wx, wy, wz = (R  * load.value) .* [1, -1, -1]
+    # distributed load magnitudes in LCS (strip units from load.value)
+    value_stripped = [ustrip(u"N/m", uconvert(u"N/m", v)) for v in load.value]
+    wx, wy, wz = (R * value_stripped) .* [1, -1, -1]
 
     # Use dispatched DLine function based on element type
     Dy .-= DLine.(Ref(load.element), wy, L, xvals, E, Istrong)
@@ -98,18 +105,55 @@ function accumulatedisp!(
     Dz::Vector{Float64})
 
     R = load.element.R[1:3, 1:3]
-    L = load.element.length
-    E = load.element.section.E
-    Istrong = load.element.section.Ix
-    Iweak = load.element.section.Iy
+    # Strip units from length and section properties (convert Quantity → Float64)
+    L = ustrip(u"m", uconvert(u"m", load.element.length))
+    E = ustrip(u"Pa", uconvert(u"Pa", load.element.section.E))
+    Istrong = ustrip(u"m^4", uconvert(u"m^4", load.element.section.Ix))
+    Iweak = ustrip(u"m^4", uconvert(u"m^4", load.element.section.Iy))
     frac = load.position
 
-    # distributed load magnitudes in LCS
-    px, py, pz = (R  * load.value) .* [1, -1, -1]
+    # distributed load magnitudes in LCS (strip units from load.value)
+    value_stripped = [ustrip(u"N", uconvert(u"N", v)) for v in load.value]
+    px, py, pz = (R * value_stripped) .* [1, -1, -1]
 
     # Use dispatched DPoint function based on element type
     Dy .-= DPoint.(Ref(load.element), py, L, xvals, frac, E, Istrong)
     Dz .-= DPoint.(Ref(load.element), pz, L, xvals, frac, E, Iweak)
+end
+
+"""
+Accumulate the displacement cause by a GravityLoad (self-weight) to an element.
+GravityLoad applies a distributed load equal to ρ * A * g in the global -Z direction.
+"""
+function accumulatedisp!(
+    load::Asap.GravityLoad, 
+    xvals::Vector{Float64}, 
+    Dy::Vector{Float64},
+    Dz::Vector{Float64})
+
+    element = load.element
+    R = element.R[1:3, 1:3]
+    # Strip units from length and section properties
+    L = ustrip(u"m", element.length)
+    E = ustrip(u"Pa", element.section.E)
+    Istrong = ustrip(u"m^4", element.section.Ix)
+    Iweak = ustrip(u"m^4", element.section.Iy)
+
+    # Self-weight per unit length: w = ρ * A * g (in N/m)
+    ρ = ustrip(u"kg/m^3", element.section.ρ)
+    A = ustrip(u"m^2", element.section.A)
+    g = ustrip(u"m/s^2", load.factor)
+    w_mag = ρ * A * g  # N/m
+
+    # Global load vector: self-weight acts in -Z direction
+    w_global = [0.0, 0.0, -w_mag]
+
+    # Transform to local coordinate system
+    wx, wy, wz = (R * w_global) .* [1, -1, -1]
+
+    # Use dispatched DLine function based on element type
+    Dy .-= DLine.(Ref(element), wy, L, xvals, E, Istrong)
+    Dz .-= DLine.(Ref(element), wz, L, xvals, E, Iweak)
 end
 
 """
@@ -118,8 +162,8 @@ end
 Get the [3 × resolution] matrix of xyz displacements in LCS
 """
 function ulocal(element::Element, model::Model; resolution = 20)
-
-    L = element.length
+    # Strip units from length (convert Quantity → Float64)
+    L = ustrip(u"m", uconvert(u"m", element.length))
 
     xinc = collect(range(0, L, resolution))
 
@@ -140,8 +184,8 @@ end
 Get the [3 × resolution] matrix of xyz displacements in GCS
 """
 function uglobal(element::Element, model::Model; resolution = 20)
-
-    L = element.length
+    # Strip units from length (convert Quantity → Float64)
+    L = ustrip(u"m", uconvert(u"m", element.length))
 
     xinc = collect(range(0, L, resolution))
 
@@ -171,7 +215,8 @@ end
 Get the local/global displacements of an element
 """
 function ElementDisplacements(element::Asap.AbstractElement, model::Asap.Model; resolution = 20)
-    L = element.length
+    # Strip units from length (convert Quantity → Float64)
+    L = ustrip(u"m", uconvert(u"m", element.length))
 
     xinc = collect(range(0, L, resolution))
 
@@ -187,7 +232,9 @@ function ElementDisplacements(element::Asap.AbstractElement, model::Asap.Model; 
 
     Dglobal = hcat([sum(Δ .* element.LCS) for Δ in eachcol(D)]...)
 
-    basepoints = element.nodeStart.position .+ first(element.LCS) * xinc'
+    # Strip units from position (convert Quantity → Float64) for basepoints calculation
+    pos_start = [ustrip(u"m", uconvert(u"m", p)) for p in element.nodeStart.position]
+    basepoints = pos_start .+ first(element.LCS) * xinc'
 
     return ElementDisplacements(element, resolution, xinc, D, Dglobal, basepoints)
 end
@@ -204,7 +251,8 @@ function ElementDisplacements(elements::AbstractVector{<:Asap.AbstractElement}, 
     element_loads = get_elemental_loads(model)
 
     for element in elements
-        L = element.length
+        # Strip units from length (convert Quantity → Float64)
+        L = ustrip(u"m", uconvert(u"m", element.length))
 
         xinc = collect(range(0, L, resolution))
 
@@ -217,7 +265,9 @@ function ElementDisplacements(elements::AbstractVector{<:Asap.AbstractElement}, 
         D = [Dx'; Dy'; Dz']
         Dglobal = hcat([sum(Δ .* element.LCS) for Δ in eachcol(D)]...)
 
-        basepoints = element.nodeStart.position .+ first(element.LCS) * xinc'
+        # Strip units from position (convert Quantity → Float64) for basepoints calculation
+        pos_start = [ustrip(u"m", uconvert(u"m", p)) for p in element.nodeStart.position]
+        basepoints = pos_start .+ first(element.LCS) * xinc'
 
         if isempty(xstore)
             xstore = [xstore; xinc]
@@ -234,19 +284,25 @@ function ElementDisplacements(elements::AbstractVector{<:Asap.AbstractElement}, 
 end
 
 """
-    displacements(model::Asap.Model, increment::Real)
+    displacements(model::Asap.Model, increment)
 
-Get the displacements of all elements in a model
+Get the displacements of all elements in a model.
+
+# Arguments
+- `model::Model` - Structural model to analyze
+- `increment` - Distance between sampling points (accepts Unitful length or Real in meters)
 """
-function displacements(model::Asap.Model, increment::Real)
+function displacements(model::Asap.Model, increment)
+    # Accept Unitful or Real - strip to meters internally
+    inc_m = increment isa Unitful.Quantity ? ustrip(u"m", increment) : Float64(increment)
+    
     results = Vector{ElementDisplacements}()
-
     ids = groupbyid(model.elements)
 
     for id in ids
         elements = model.elements[id]
-        L = sum(getproperty.(elements, :length))
-        n = max(Int(round(L/increment)), 2)
+        L = sum(ustrip(u"m", el.length) for el in elements)
+        n = max(Int(round(L / inc_m)), 2)
 
         push!(results, ElementDisplacements(elements, model; resolution = n))
     end

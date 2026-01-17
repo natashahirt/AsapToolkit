@@ -1,19 +1,19 @@
 """
-    GridFrame(Lx, nx, Ly, ny, section; load = [0., 0., -1.], support = :corner, support_type = :pinned)
+    GridFrame(Lx, nx, Ly, ny, section; load = [0.0u"N", 0.0u"N", -1.0u"N"], support = :corner, support_type = :pinned)
 
 Generate a grid-topology Asap model.
 
 # Arguments
-- `Lx::Real` total length in x direction
+- `Lx::Real` total length in x direction (meters)
 - `nx::Integer` number of bays in x direction
-- `Ly::Real` total length in y direction
+- `Ly::Real` total length in y direction (meters)
 - `ny::Integer` number of bays in y direction
 - `section::Asap.Section` cross section assigned to elements
 
 # Optional arguments
-- `load = [0, 0, 1]` force applied to all free nodes
+- `load::Vector{QuantityForce}` force applied to all free nodes
 - `support = :corner` nodes to fix. Choose from: :corner, :x, :y, :xy
-- `support_type = :pinned` boundary condition on support nodes. See Asap.fixDict for valud entries
+- `support_type = :pinned` boundary condition on support nodes. See Asap.fixDict for valid entries
 
 # Return
 Returns a `GridFrame` structure.
@@ -41,7 +41,7 @@ struct GridFrame <: AbstractGenerator
     dy::Real
     igrid::Matrix{Int64}
 
-    function GridFrame(Lx::Real, nx::Integer, Ly::Real, ny::Integer, section::Asap.Section; load = [0., 0., -1.], support = :corner, support_type = :pinned)
+    function GridFrame(Lx::Real, nx::Integer, Ly::Real, ny::Integer, section::Asap.Section; load = [0.0u"N", 0.0u"N", -1.0u"N"], support = :corner, support_type = :pinned)
 
         @assert in(support, [:corner, :x, :y, :xy])
 
@@ -83,8 +83,8 @@ struct GridFrame <: AbstractGenerator
             support_indices = [igrid[[1, ny], :][:]; igrid[2:ny-1, [1, nx]][:]]
         end
 
-        #make nodes
-        nodes = [Node(pos, :free, :free) for pos in xyz]
+        #make nodes - promote positions to Unitful
+        nodes = [Node([p * u"m" for p in pos], :free, :free) for pos in xyz]
 
         #make support nodes
         for node in nodes[support_indices]

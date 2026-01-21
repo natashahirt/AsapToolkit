@@ -122,6 +122,64 @@ function accumulatedisp!(
 end
 
 """
+Accumulate the displacement caused by a TributaryLoad to an element.
+TributaryLoad represents a piecewise linear distributed load based on tributary widths.
+Each segment is approximated as a point load at its centroid.
+"""
+function accumulatedisp!(
+    load::Asap.TributaryLoad, 
+    xvals::Vector{Float64}, 
+    Dy::Vector{Float64},
+    Dz::Vector{Float64})
+
+    element = load.element
+    R = element.R[1:3, 1:3]
+    L = ustrip(u"m", element.length)
+    E = ustrip(u"Pa", element.section.E)
+    Istrong = ustrip(u"m^4", element.section.Ix)
+    Iweak = ustrip(u"m^4", element.section.Iy)
+
+    # Load parameters
+    dir = collect(load.direction)
+    pressure = ustrip(u"Pa", load.pressure)
+    widths_m = [ustrip(u"m", w) for w in load.widths]
+    positions = load.positions
+    n_seg = length(positions) - 1
+
+    for i in 1:n_seg
+        s1, s2 = positions[i], positions[i+1]
+        w1, w2 = widths_m[i], widths_m[i+1]
+
+        # Skip negligible segments
+        (s2 - s1) < 1e-12 && continue
+        (w1 + w2) < 1e-12 && continue
+
+        # Segment parameters
+        a = s1 * L
+        b = s2 * L
+        seg_len = b - a
+        
+        # Average intensity and total force for this segment
+        w_avg = pressure * (w1 + w2) / 2  # N/m
+        F_total = w_avg * seg_len  # N
+        
+        # Centroid position as fraction of span
+        frac = (a + b) / 2 / L
+
+        # Global load vector
+        w_global = dir .* F_total
+        
+        # Transform to local coordinate system
+        w_local = R * w_global
+        px, py, pz = w_local .* [1, -1, -1]
+
+        # Use point load displacement formula at centroid
+        Dy .-= DPoint.(Ref(element), py, L, xvals, frac, E, Istrong)
+        Dz .-= DPoint.(Ref(element), pz, L, xvals, frac, E, Iweak)
+    end
+end
+
+"""
 Accumulate the displacement cause by a GravityLoad (self-weight) to an element.
 GravityLoad applies a distributed load equal to ρ * A * g in the global -Z direction.
 """

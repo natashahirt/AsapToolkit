@@ -9,6 +9,26 @@ Series of extension tools for [Asap.jl](https://github.com/keithjlee/Asap) inclu
 - Automatic 2D truss generation: `generatewarren2d`
 - Automatic 3D spaceframe generation: `generatespaceframe`
 
+# Units (Unitful.jl)
+AsapToolkit, like Asap, uses [Unitful.jl](https://github.com/PainterQubits/Unitful.jl) for type-safe unit handling. All physical quantities should be specified with units:
+
+```julia
+using Unitful
+
+# Node positions with units
+n1 = Node([0.0u"mm", 0.0u"mm", 0.0u"mm"], :fixed)
+n2 = Node([6000.0u"mm", 0.0u"mm", 0.0u"mm"], :fixed)
+
+# Loads with units
+load = LineLoad(element, [0.0u"N/m", 0.0u"N/m", -30.0u"N/m"])
+```
+
+Quantities are automatically converted to SI units internally. When retrieving results, convert to your preferred units with `uconvert`:
+
+```julia
+moment_kNm = uconvert(u"kN*m", analysis.Mz[i] * u"N*m")
+```
+
 # Element analysis
 The internal forces for an element in an analyzed structure can be extracted via:
 ```julia

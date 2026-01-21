@@ -1,5 +1,166 @@
 
 """
+Accumulate the internal forces caused by a TributaryLoad to the current element.
+TributaryLoad represents a piecewise linear distributed load based on tributary widths.
+Each segment between breakpoints is approximated as a partial uniform load.
+"""
+function accumulate_force!(load::Asap.TributaryLoad, 
+    xvals::Vector{Float64}, 
+    P::Vector{Float64},
+    My::Vector{Float64}, 
+    Vy::Vector{Float64}, 
+    Mz::Vector{Float64}, 
+    Vz::Vector{Float64})
+
+    element = load.element
+    R = element.R[1:3, 1:3]
+    L = ustrip(u"m", uconvert(u"m", element.length))
+    
+    # Get load intensity per unit length at each position: w(s) = pressure * width(s)
+    # Direction in global coordinates
+    dir = collect(load.direction)
+    pressure = ustrip(u"Pa", load.pressure)
+    widths_m = [ustrip(u"m", w) for w in load.widths]
+    
+    # Process each segment between breakpoints
+    positions = load.positions
+    n_seg = length(positions) - 1
+    
+    for i in 1:n_seg
+        s1, s2 = positions[i], positions[i+1]
+        w1, w2 = widths_m[i], widths_m[i+1]
+        
+        # Skip negligible segments
+        (s2 - s1) < 1e-12 && continue
+        (w1 + w2) < 1e-12 && continue
+        
+        # Segment bounds in physical coordinates
+        a = s1 * L  # start of loaded segment
+        b = s2 * L  # end of loaded segment
+        
+        # Average intensity for this segment (trapezoidal → uniform approximation)
+        w_avg = pressure * (w1 + w2) / 2  # N/m
+        
+        # Global load vector (typically downward: 0, 0, -1)
+        w_global = dir .* w_avg
+        
+        # Transform to local coordinate system
+        w_local = R * w_global
+        wx, wy, wz = w_local .* [1, -1, -1]
+        
+        # Accumulate forces from this partial uniform load segment [a, b]
+        for (j, x) in enumerate(xvals)
+            # Axial force contribution
+            P[j] += _PLine_partial(wx, L, x, a, b)
+            
+            # Bending in y-z plane
+            My[j] += _MLine_partial(element, wy, L, x, a, b)
+            Vy[j] += _VLine_partial(element, wy, L, x, a, b)
+            
+            # Bending in x-z plane  
+            Mz[j] += _MLine_partial(element, wz, L, x, a, b)
+            Vz[j] += _VLine_partial(element, wz, L, x, a, b)
+        end
+    end
+end
+
+# Helper: axial force from partial uniform load on [a, b]
+function _PLine_partial(w, L, x, a, b)
+    # Total force from segment
+    F = w * (b - a)
+    # Reaction at start (assuming simply supported for axial)
+    R_start = F * (L - (a + b) / 2) / L
+    
+    if x < a
+        -R_start
+    elseif x < b
+        -(R_start + w * (x - a))
+    else
+        -(R_start + F)
+    end
+end
+
+# Helper: moment from partial uniform load on [a, b]
+function _MLine_partial(::Asap.Element{Asap.FreeFree}, w, L, x, a, b)
+    _MLine_partial_ss(w, L, x, a, b)
+end
+function _MLine_partial(::Asap.Element{Asap.Joist}, w, L, x, a, b)
+    _MLine_partial_ss(w, L, x, a, b)
+end
+function _MLine_partial(::Asap.Element{Asap.FixedFixed}, w, L, x, a, b)
+    _MLine_partial_ff(w, L, x, a, b)
+end
+function _MLine_partial(::Asap.Element{Asap.FreeFixed}, w, L, x, a, b)
+    _MLine_partial_pf(w, L, x, a, b)
+end
+function _MLine_partial(::Asap.Element{Asap.FixedFree}, w, L, x, a, b)
+    _MLine_partial_fp(w, L, x, a, b)
+end
+
+# Simply supported partial uniform load moment
+function _MLine_partial_ss(w, L, x, a, b)
+    # Reaction at A (x=0)
+    c = (a + b) / 2  # centroid of load
+    F = w * (b - a)
+    Ra = F * (L - c) / L
+    
+    if x <= a
+        Ra * x
+    elseif x <= b
+        Ra * x - w * (x - a)^2 / 2
+    else
+        Ra * x - F * (x - c)
+    end
+end
+
+# Fixed-fixed partial uniform load moment
+function _MLine_partial_ff(w, L, x, a, b)
+    seg_len = b - a
+    c = (a + b) / 2
+    F = w * seg_len
+    
+    # Fixed-end moments (approximate)
+    Ma = F * c * (L - c)^2 / L^2 - F * seg_len^2 / 12 * (L - 2*c) / L
+    Mb = F * (L - c) * c^2 / L^2 + F * seg_len^2 / 12 * (L - 2*c) / L
+    
+    # Reaction at A
+    Ra = (F * (L - c) + Ma - Mb) / L
+    
+    if x <= a
+        Ra * x - Ma
+    elseif x <= b
+        Ra * x - Ma - w * (x - a)^2 / 2
+    else
+        Ra * x - Ma - F * (x - c)
+    end
+end
+
+# Pinned-fixed (approximate)
+function _MLine_partial_pf(w, L, x, a, b)
+    _MLine_partial_ss(w, L, x, a, b)
+end
+
+# Fixed-pinned (approximate)
+function _MLine_partial_fp(w, L, x, a, b)
+    _MLine_partial_ss(w, L, x, a, b)
+end
+
+# Helper: shear from partial uniform load on [a, b]
+function _VLine_partial(element, w, L, x, a, b)
+    c = (a + b) / 2
+    F = w * (b - a)
+    Ra = F * (L - c) / L  # Simply supported reaction
+    
+    if x <= a
+        Ra
+    elseif x <= b
+        Ra - w * (x - a)
+    else
+        Ra - F
+    end
+end
+
+"""
 Accumlate the internal forces cause by a given load to the current element
 """
 function accumulate_force!(load::LineLoad, 

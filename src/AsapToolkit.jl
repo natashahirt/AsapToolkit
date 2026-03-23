@@ -24,7 +24,7 @@ export BoundedGroundStructure
 export to_truss
 export to_frame
 
-include("ForceAnalysis/ForceFunctions.jl")
+include("ForceAnalysis/forceFunctions.jl")
 include("ForceAnalysis/Translations.jl")
 include("ForceAnalysis/ForceAnalysis.jl")
 export groupbyid
@@ -52,7 +52,7 @@ include("IO/GH/GHAsap.jl")
 export GHsave
 
 
-include("General/general.jl")
+include("General/General.jl")
 export clear_supports!
 export element_connectivity
 
